@@ -1,0 +1,18 @@
+IGNORE_THIS_FILE_AQM BACKUP/
+
+# Dependencies and generated build output
+Phone_app/node_modules/
+Phone_app/jdk.zip
+Phone_app/android/.gradle/
+Phone_app/android/**/build/
+*.apk
+
+# Local machine configuration and secrets
+**/local.properties
+.env
+.env.*
+google-services.json
+
+# Editor-specific project settings
+**/.idea/
+.vscode/

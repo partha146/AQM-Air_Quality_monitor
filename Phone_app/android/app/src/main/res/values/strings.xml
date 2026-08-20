@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AQM</string>
+    <string name="title_activity_main">AQM</string>
+    <string name="package_name">com.partha.aqm</string>
+    <string name="custom_url_scheme">com.partha.aqm</string>
+</resources>

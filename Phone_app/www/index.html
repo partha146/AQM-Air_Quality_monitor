@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Air Quality Monitor | by Partha A B</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AQM">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#06080f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Real-time air quality monitor — CO2, PM, AQI, temperature & humidity via ESP32.">
+
+  <!-- Design System -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ════════════ SPLASH SCREEN ════════════ -->
+  <div id="splash-screen" class="splash">
+    <div class="splash-ring">
+      <div class="splash-ring-bg"></div>
+      <div class="splash-ring-spin"></div>
+      <div class="splash-center">
+        <i data-lucide="wind" class="splash-icon"></i>
+        <span class="splash-logo-text">AQM</span>
+      </div>
+    </div>
+    <h1 class="splash-title">AIR QUALITY</h1>
+    <p class="splash-subtitle">by <strong>Partha A B</strong></p>
+    <div class="splash-progress-track">
+      <div id="splash-progress" class="splash-progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- ════════════ APP SHELL ════════════ -->
+  <div class="app-shell">
+
+    <!-- ──── HEADER ──── -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="header-logo">
+          <i data-lucide="activity" style="width:20px;height:20px;"></i>
+        </div>
+        <div>
+          <h2 class="header-title">Air Quality Monitor</h2>
+          <div class="header-status">
+            <span id="connection-status-dot" class="status-dot"></span>
+            <span id="connection-status-text">ONLINE</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ──── TAB CONTENT ──── -->
+    <div class="tab-content">
+
+      <!-- ═══ TAB 1: DASHBOARD ═══ -->
+      <div id="tab-dashboard" class="tab-panel active">
+
+        <!-- Radial AQI Gauge -->
+        <div class="gauge-hero">
+          <div class="gauge-wrapper">
+            <svg class="gauge-svg" viewBox="0 0 200 200">
+              <circle class="gauge-track" cx="100" cy="100" r="80"/>
+              <circle class="gauge-glow" cx="100" cy="100" r="80" id="gauge-glow"/>
+              <circle class="gauge-fill" cx="100" cy="100" r="80" id="gauge-arc"/>
+            </svg>
+            <div class="gauge-center">
+              <span class="gauge-label">AIR QUALITY</span>
+              <span class="gauge-value" id="main-aqi-value">--</span>
+              <span class="gauge-status" id="main-aqi-status">LOADING</span>
+            </div>
+          </div>
+          <div class="gauge-co2">
+            CO₂ <strong id="main-co2-value">--</strong> <span>PPM</span>
+          </div>
+        </div>
+
+        <!-- Health Color Bar -->
+        <div id="aq-color-bar" class="health-bar"></div>
+
+        <!-- Sensor Cards Grid -->
+                <div class="sensor-grid">
+
+          <!-- CO2 -->
+          <div class="sensor-card glass-card" id="card-co2" style="--card-accent: var(--co2);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">CO₂</span>
+              </div>
+              <svg viewBox="0 0 28 14" class="sensor-icon" fill="currentColor"><circle cx="2.5" cy="7" r="2.5" opacity=".85"/><circle cx="14" cy="7" r="2.8"/><circle cx="25.5" cy="7" r="2.5" opacity=".85"/><rect x="5.2" y="5.5" width="6" height="1.2" rx=".6"/><rect x="5.2" y="7.3" width="6" height="1.2" rx=".6"/><rect x="16.8" y="5.5" width="6" height="1.2" rx=".6"/><rect x="16.8" y="7.3" width="6" height="1.2" rx=".6"/></svg>
+            </div>
+            <div><span class="sensor-value" id="val-co2">--</span><span class="sensor-unit">ppm</span></div>
+            <p class="sensor-desc" id="desc-co2">MTP80-A Sensor</p>
+          </div>
+
+          <!-- AQI -->
+          <div class="sensor-card glass-card" id="card-aqi" style="--card-accent: var(--aqi);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">AQI</span>
+              </div>
+              <i data-lucide="shield-check" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-aqi">--</span><span class="sensor-unit">US EPA</span></div>
+            <p class="sensor-desc" id="desc-aqi">Calculated Index</p>
+          </div>
+
+          <!-- IAQ -->
+          <div class="sensor-card glass-card" id="card-iaq" style="--card-accent: var(--iaq);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">IAQ</span>
+              </div>
+              <i data-lucide="home" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-iaq">--</span><span class="sensor-unit">BME680</span></div>
+            <p class="sensor-desc" id="desc-iaq">Indoor Quality</p>
+          </div>
+
+          <!-- PM1.0 -->
+          <div class="sensor-card glass-card" id="card-pm1_0" style="--card-accent: var(--pm1);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">PM1.0</span>
+              </div>
+              <i data-lucide="circle-dot" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-pm1_0">--</span><span class="sensor-unit">µg/m³</span></div>
+            <p class="sensor-desc" id="desc-pm1_0">Ultra Fine</p>
+          </div>
+
+          <!-- PM2.5 -->
+          <div class="sensor-card glass-card" id="card-pm2_5" style="--card-accent: var(--pm25);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">PM2.5</span>
+              </div>
+              <i data-lucide="disc" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-pm2_5">--</span><span class="sensor-unit">µg/m³</span></div>
+            <p class="sensor-desc" id="desc-pm2_5">PMS7003</p>
+          </div>
+
+          <!-- PM10 -->
+          <div class="sensor-card glass-card" id="card-pm10" style="--card-accent: var(--pm10);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">PM10</span>
+              </div>
+              <svg viewBox="0 0 16 16" class="sensor-icon" fill="currentColor"><circle cx="8" cy="8" r="7.5" opacity=".25"/><circle cx="8" cy="8" r="5"/></svg>
+            </div>
+            <div><span class="sensor-value" id="val-pm10">--</span><span class="sensor-unit">µg/m³</span></div>
+            <p class="sensor-desc" id="desc-pm10">Coarse Dust</p>
+          </div>
+
+          <!-- Temperature -->
+          <div class="sensor-card glass-card" id="card-temp" style="--card-accent: var(--temp);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">TEMP</span>
+              </div>
+              <i data-lucide="thermometer" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-temp">--</span><span class="sensor-unit">°C</span></div>
+            <p class="sensor-desc" id="desc-temp">BME680 Sensor</p>
+          </div>
+
+          <!-- Humidity -->
+          <div class="sensor-card glass-card" id="card-hum" style="--card-accent: var(--hum);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">HUMIDITY</span>
+              </div>
+              <i data-lucide="droplets" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-hum">--</span><span class="sensor-unit">%</span></div>
+            <p class="sensor-desc" id="desc-hum">Relative Humidity</p>
+          </div>
+
+          <!-- Pressure -->
+          <div class="sensor-card glass-card" id="card-pres" style="--card-accent: var(--pres);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">PRESSURE</span>
+              </div>
+              <i data-lucide="gauge" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-pres">--</span><span class="sensor-unit">hPa</span></div>
+            <p class="sensor-desc" id="desc-pres">Barometric</p>
+          </div>
+
+          <!-- VOC Gas -->
+          <div class="sensor-card glass-card" id="card-voc_ppm" style="--card-accent: var(--voc);">
+            <div class="sensor-card-header">
+              <div class="sensor-card-label">
+                <span class="sensor-name">VOC GAS</span>
+              </div>
+              <i data-lucide="flame" class="sensor-icon"></i>
+            </div>
+            <div><span class="sensor-value" id="val-voc_ppm">--</span><span class="sensor-unit">ppm</span></div>
+            <p class="sensor-desc" id="desc-gas">BME680 VOC</p>
+          </div>
+
+        </div><!-- /sensor-grid -->
+
+        <!-- Buzzer Control -->
+        <div class="buzzer-card glass-card">
+          <div class="buzzer-info">
+            <div id="buzzer-icon-box" class="buzzer-icon-box">
+              <i data-lucide="volume-2" id="buzzer-icon" style="width:20px;height:20px;"></i>
+            </div>
+            <div>
+              <div class="buzzer-title">ESP32 Alarm Buzzer</div>
+              <div id="buzzer-status-desc" class="buzzer-status">Enabled (Active on hazardous levels)</div>
+            </div>
+          </div>
+          <label class="toggle-track on" id="buzzer-toggle-track">
+            <input type="checkbox" id="buzzer-mute-toggle" class="toggle-input" checked>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+
+        <!-- Sync Timer -->
+        <div class="sync-bar">
+          <div class="sync-bar-left">
+            <i data-lucide="refresh-cw" class="sync-icon"></i>
+            <span>Live Sync</span>
+          </div>
+          <span id="next-update-timer" class="sync-timer">Live • every 1s</span>
+        </div>
+
+      </div><!-- /tab-dashboard -->
+
+      <!-- ═══ TAB 2: ANALYTICS ═══ -->
+      <div id="tab-analytics" class="tab-panel">
+
+        <!-- Time Range -->
+        <div class="range-selector">
+          <button data-range="1D" class="range-btn active">1 Day</button>
+          <button data-range="1W" class="range-btn">1 Week</button>
+          <button data-range="1M" class="range-btn">1 Month</button>
+        </div>
+
+        <!-- PM Combined -->
+        <div class="chart-card glass-card" onclick="openFullModal('PM_COMBINED')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="layers" style="width:16px;height:16px;color:var(--good);"></i>
+              <span>Particulate Matter</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap tall">
+            <canvas id="mini-pm-chart"></canvas>
+          </div>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot" style="background:var(--pm1);"></span>PM1.0</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--good);"></span>PM2.5</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--pm25);"></span>PM10</span>
+          </div>
+        </div>
+
+        <!-- CO2 -->
+        <div class="chart-card glass-card" onclick="openFullModal('CO2')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="cloud" style="width:16px;height:16px;color:var(--co2);"></i>
+              <span>CO₂ Concentration (PPM)</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mini-co2-chart"></canvas></div>
+        </div>
+
+        <!-- AQI -->
+        <div class="chart-card glass-card" onclick="openFullModal('AQI')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="shield-check" style="width:16px;height:16px;color:var(--aqi);"></i>
+              <span>Air Quality Index (AQI)</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mini-aqi-chart"></canvas></div>
+        </div>
+
+        <!-- Temperature -->
+        <div class="chart-card glass-card" onclick="openFullModal('TEMP')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="thermometer" style="width:16px;height:16px;color:var(--temp);"></i>
+              <span>Temperature (°C)</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mini-temp-chart"></canvas></div>
+        </div>
+
+        <!-- Humidity -->
+        <div class="chart-card glass-card" onclick="openFullModal('HUM')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="droplets" style="width:16px;height:16px;color:var(--hum);"></i>
+              <span>Humidity (%)</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mini-hum-chart"></canvas></div>
+        </div>
+
+      </div><!-- /tab-analytics -->
+
+      <!-- ═══ TAB 3: SETTINGS ═══ -->
+      <div id="tab-settings" class="tab-panel">
+        <div style="position:relative;overflow:hidden;min-height:calc(100vh - 160px);">
+
+          <!-- Settings Main Menu -->
+          <div id="settings-menu" class="settings-view settings-main">
+
+            <div class="glass-card" style="overflow:hidden;margin-bottom:10px;">
+              <button onclick="openSettingsSubView('settings-wifi')" class="settings-nav-item">
+                <div class="settings-nav-left">
+                  <div class="settings-nav-icon" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);color:var(--good);">
+                    <i data-lucide="wifi" style="width:20px;height:20px;"></i>
+                  </div>
+                  <div>
+                    <div class="settings-nav-title">Update WiFi</div>
+                    <div class="settings-nav-desc">Manage ESP32 networks</div>
+                  </div>
+                </div>
+                <i data-lucide="chevron-right" class="settings-chevron"></i>
+              </button>
+            </div>
+
+            <div class="glass-card" style="overflow:hidden;">
+              <button onclick="openSettingsSubView('settings-about')" class="settings-nav-item">
+                <div class="settings-nav-left">
+                  <div class="settings-nav-icon" style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);color:var(--voc);">
+                    <i data-lucide="info" style="width:20px;height:20px;"></i>
+                  </div>
+                  <div>
+                    <div class="settings-nav-title">About</div>
+                    <div class="settings-nav-desc">App info & sensors</div>
+                  </div>
+                </div>
+                <i data-lucide="chevron-right" class="settings-chevron"></i>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- WiFi Sub-view -->
+          <div id="settings-wifi" class="settings-view settings-sub">
+            <button onclick="closeSettingsSubView('settings-wifi')" class="settings-back">
+              <i data-lucide="chevron-left" style="width:18px;height:18px;"></i>
+              <span>Back</span>
+            </button>
+
+            <div class="wifi-section">
+              <div class="wifi-section-header">
+                <div class="wifi-header-icon"><i data-lucide="wifi" style="width:18px;height:18px;"></i></div>
+                <div>
+                  <div class="wifi-header-title">WiFi Configuration</div>
+                  <div class="wifi-header-desc">3 networks in priority order.</div>
+                </div>
+              </div>
+
+              <!-- Slot 1 -->
+              <div class="wifi-slot">
+                <label id="wifi-label-1" data-base-text="WiFi 1 (Primary)" class="wifi-slot-label" style="color:var(--accent);">WiFi 1 (Primary)</label>
+                <input id="wifi-ssid-1" type="text" placeholder="SSID (network name)" class="wifi-input">
+                <div class="wifi-input-wrap">
+                  <input id="wifi-pass-1" type="password" placeholder="Password" class="wifi-input">
+                  <button type="button" onclick="togglePasswordVisibility('wifi-pass-1','eye-icon-1')" class="wifi-eye-btn">
+                    <i id="eye-icon-1" data-lucide="eye" style="width:16px;height:16px;"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Slot 2 -->
+              <div class="wifi-slot">
+                <label id="wifi-label-2" data-base-text="WiFi 2 (Backup)" class="wifi-slot-label" style="color:var(--moderate);">WiFi 2 (Backup)</label>
+                <input id="wifi-ssid-2" type="text" placeholder="SSID (optional)" class="wifi-input">
+                <div class="wifi-input-wrap">
+                  <input id="wifi-pass-2" type="password" placeholder="Password" class="wifi-input">
+                  <button type="button" onclick="togglePasswordVisibility('wifi-pass-2','eye-icon-2')" class="wifi-eye-btn">
+                    <i id="eye-icon-2" data-lucide="eye" style="width:16px;height:16px;"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Slot 3 -->
+              <div class="wifi-slot">
+                <label id="wifi-label-3" data-base-text="WiFi 3 (Fallback)" class="wifi-slot-label" style="color:var(--temp);">WiFi 3 (Fallback)</label>
+                <input id="wifi-ssid-3" type="text" placeholder="SSID (optional)" class="wifi-input">
+                <div class="wifi-input-wrap">
+                  <input id="wifi-pass-3" type="password" placeholder="Password" class="wifi-input">
+                  <button type="button" onclick="togglePasswordVisibility('wifi-pass-3','eye-icon-3')" class="wifi-eye-btn">
+                    <i id="eye-icon-3" data-lucide="eye" style="width:16px;height:16px;"></i>
+                  </button>
+                </div>
+              </div>
+
+              <button id="wifi-apply-btn" onclick="applyWiFiConfig()" class="btn-primary">Apply Changes</button>
+              <p id="wifi-save-status" class="wifi-save-status">✓ Saved! ESP32 will pick up changes within ~5s.</p>
+            </div>
+          </div>
+
+          <!-- About Sub-view -->
+          <div id="settings-about" class="settings-view settings-sub">
+            <button onclick="closeSettingsSubView('settings-about')" class="settings-back">
+              <i data-lucide="chevron-left" style="width:18px;height:18px;"></i>
+              <span>Back</span>
+            </button>
+
+            <div class="about-section">
+              <div class="about-title">Air Quality Monitor (AQM)</div>
+              <div class="about-text">
+                <p>A real-time indoor air quality monitoring system built with an <span class="about-highlight cyan">ESP32</span> microcontroller. Sensor readings are uploaded to <span class="about-highlight amber">Firebase Realtime Database</span> every second and displayed live in this app.</p>
+
+                <p style="margin-top:14px;"><strong>Sensors Used:</strong></p>
+                <ul class="about-sensors">
+                  <li><span class="about-sensor-dot" style="background:var(--co2);"></span><span><strong>MTP80-A (NDIR CO₂)</strong> — Measures carbon dioxide concentration (0–5000 ppm) using non-dispersive infrared absorption</span></li>
+                  <li><span class="about-sensor-dot" style="background:var(--good);"></span><span><strong>PMS7003 (Laser PM)</strong> — Optical laser scattering sensor for PM1.0, PM2.5, PM10 particulate matter (µg/m³)</span></li>
+                  <li><span class="about-sensor-dot" style="background:var(--moderate);"></span><span><strong>BME680 (Environmental)</strong> — Temperature, humidity, pressure, and VOC gas resistance via metal oxide coil. Used to compute IAQ</span></li>
+                  <li><span class="about-sensor-dot" style="background:var(--temp);"></span><span><strong>SSD1306 OLED (128×64)</strong> — Local display with 5 pages, yellow header bar, blue data body</span></li>
+                </ul>
+
+                <p style="margin-top:14px;"><strong>How It Works:</strong></p>
+                <p>The ESP32 runs a <span class="about-highlight cyan">dual-core non-blocking architecture</span>. Core 1 handles sensors, OLED, button, and buzzer in a tight loop (~1ms per iteration). Core 0 handles all Firebase HTTP uploads on a separate FreeRTOS task — so the button and display never lag.</p>
+                <p style="margin-top:8px;">AQI is calculated using the <span class="about-highlight emerald">US EPA PM2.5 scale</span> (0–500). IAQ combines gas resistance and humidity into a 0–500 indoor quality score. An active buzzer triggers on hazardous levels (CO₂ >1000, PM2.5 >35, AQI >100, IAQ >150).</p>
+
+                <p style="margin-top:14px;"><strong>Multi-WiFi:</strong></p>
+                <p>The ESP32 stores up to 3 WiFi networks in NVS flash memory. On boot, it tries them in priority order. If connection drops mid-operation, Core 0 automatically reconnects. WiFi credentials can be updated remotely from this app — no need to reflash firmware.</p>
+              </div>
+
+              <div class="about-footer">
+                <p class="about-footer-name">Designed & Built by <strong>Partha A B</strong></p>
+                <p class="about-footer-version">v2.0 • ESP32 + Firebase + Capacitor</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /tab-settings -->
+
+    </div><!-- /tab-content -->
+
+    <!-- ════════════ FULL GRAPH MODAL ════════════ -->
+    <div id="full-graph-modal" class="modal-overlay">
+      <div class="modal-header">
+        <div>
+          <h3 id="modal-graph-title" class="modal-title">DETAILED ANALYTICS</h3>
+          <p id="modal-graph-subtitle" class="modal-subtitle">Historical trend analysis</p>
+        </div>
+        <button onclick="closeFullModal()" class="modal-close">
+          <i data-lucide="x" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+
+      <div class="range-selector" style="margin-bottom:14px;">
+        <button data-modal-range="1D" class="modal-range-btn range-btn active">1 Day</button>
+        <button data-modal-range="1W" class="modal-range-btn range-btn">1 Week</button>
+        <button data-modal-range="1M" class="modal-range-btn range-btn">1 Month</button>
+      </div>
+
+      <div class="modal-chart-area">
+        <canvas id="full-modal-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- ──── BOTTOM NAVIGATION ──── -->
+    <nav class="bottom-nav">
+      <button id="nav-btn-dashboard" class="nav-btn active">
+        <i data-lucide="layout-dashboard" class="nav-btn-icon"></i>
+        <span class="nav-btn-label">Dashboard</span>
+      </button>
+      <button id="nav-btn-analytics" class="nav-btn">
+        <i data-lucide="line-chart" class="nav-btn-icon"></i>
+        <span class="nav-btn-label">Analytics</span>
+      </button>
+      <button id="nav-btn-settings" class="nav-btn">
+        <i data-lucide="settings" class="nav-btn-icon"></i>
+        <span class="nav-btn-label">Settings</span>
+      </button>
+    </nav>
+
+  </div><!-- /app-shell -->
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+
+  <!-- PWA: Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log('[PWA] SW registered:', reg.scope))
+          .catch(err => console.warn('[PWA] SW failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
