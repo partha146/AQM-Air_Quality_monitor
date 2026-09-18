@@ -27,6 +27,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_BME680.h>
+#include <Adafruit_NeoPixel.h>
 #include <time.h>
 #include <Preferences.h>
 #include <freertos/FreeRTOS.h>
@@ -65,6 +66,12 @@ const char FIREBASE_HOST[] = "https://air-quality-monitor-1d94f-default-rtdb.asi
 #define MTP80A_TX_PIN 17
 #define PMS_RX_PIN 25
 #define PMS_TX_PIN 26
+#define WS2812B_PIN 15
+#define WS2812B_COUNT 7
+#define WS2812B_BRIGHTNESS 30 // 75% output: 25% less brightness for every color
+
+// Install "Adafruit NeoPixel" from the Arduino Library Manager before compiling.
+Adafruit_NeoPixel statusLed(WS2812B_COUNT, WS2812B_PIN, NEO_GRB + NEO_KHZ800);
 
 // OLED Setup
 #define SCREEN_WIDTH 128
@@ -121,6 +128,8 @@ volatile bool buzzerEnabled = true;
 bool isDangerous = false;
 bool buzzerState = false;
 bool lastButtonState = HIGH;
+uint32_t lastStatusLedColor = 0;
+bool statusLedColorSet = false;
 unsigned long lastBuzzerToggleTime = 0;
 unsigned long lastButtonDebounceTime = 0;
 unsigned long lastOLEDUpdateTime = 0;
@@ -206,6 +215,8 @@ void mtpUpdate() {
 float convertGasToVocPpm(float gasKOhms);
 int calculateAQI(int pm25);
 int calculateIAQ(float gasKOhms, float humidity);
+uint8_t getEnvironmentalLedLevel();
+void updateStatusLed();
 
 unsigned long bmeReadyAt = 0;
 bool bmeReadPending = false;
@@ -303,6 +314,48 @@ int calculateIAQ(float gasKOhms, float humidity) {
 float convertGasToVocPpm(float gasKOhms) {
   if (gasKOhms <= 0) return -1.0;
   return constrain((100.0 / gasKOhms) * 0.35, 0.05, 25.0);
+}
+
+// Classify the three local environmental indices into the bands below. Red
+// remains separate because it uses isDangerous, the same rule as the buzzer.
+// 0=green, 1=yellow, 2=orange, 3=purple (near-danger).
+uint8_t getEnvironmentalLedLevel() {
+  // Closest non-danger band: CO2 951-1000, AQI 91-100, IAQ 126-150.
+  if ((data.co2Valid && data.co2 > 950) || data.aqi > 90 || data.iaq > 125) return 3;
+
+  // Elevated band: CO2 901-950, AQI 76-90, IAQ 101-125.
+  if ((data.co2Valid && data.co2 > 900) || data.aqi > 75 || data.iaq > 100) return 2;
+
+  // Caution band: CO2 801-900, AQI 51-75, IAQ 51-100.
+  if ((data.co2Valid && data.co2 > 800) || data.aqi > 50 || data.iaq > 50) return 1;
+
+  return 0;
+}
+
+void updateStatusLed() {
+  // isDangerous is the same local rule that activates the buzzer:
+  // CO2 >1000, PM2.5 >35, AQI >100, or IAQ >150.
+  // Solid, recognizable status colors. The brightness limit applies equally
+  // to every color through statusLed.setBrightness() in setup().
+  uint32_t color;
+  if (isDangerous) {
+    color = statusLed.Color(255, 0, 0);          // Red: danger / buzzer threshold
+  } else {
+    switch (getEnvironmentalLedLevel()) {
+      case 1: color = statusLed.Color(255, 255, 0); break;  // Yellow: caution
+      case 2: color = statusLed.Color(255, 128, 0); break;  // Orange: elevated
+      case 3: color = statusLed.Color(128, 0, 255); break;  // Purple: near danger
+      default: color = statusLed.Color(0, 255, 0); break;   // Green: safe
+    }
+  }
+
+  // show() briefly occupies the timing peripheral, so send only on a change.
+  if (!statusLedColorSet || color != lastStatusLedColor) {
+    statusLed.fill(color);  // Apply the same overall-status color to all seven LEDs.
+    statusLed.show();
+    lastStatusLedColor = color;
+    statusLedColorSet = true;
+  }
 }
 
 // ==========================================
@@ -741,6 +794,10 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
+  statusLed.begin();
+  statusLed.setBrightness(WS2812B_BRIGHTNESS);
+  statusLed.clear();
+  statusLed.show();
 
   // UART sensors
   MTP80A_Serial.begin(9600, SERIAL_8N1, MTP80A_RX_PIN, MTP80A_TX_PIN);
@@ -949,13 +1006,16 @@ void loop() {
   // ── F. Danger assessment ──
   isDangerous = ((data.co2Valid && data.co2 > 1000) || (data.pm2_5 > 35) || (data.aqi > 100) || (data.iaq > 150));
 
-  // ── G. OLED periodic refresh (not on button press — that's immediate above) ──
+  // ── G. WS2812B combined environmental safety indicator ──
+  updateStatusLed();
+
+  // ── H. OLED periodic refresh (not on button press — that's immediate above) ──
   if (now - lastOLEDUpdateTime >= OLED_UPDATE_INTERVAL) {
     lastOLEDUpdateTime = now;
     updateOLED();
   }
 
-  // ── H. Buzzer ──
+  // ── I. Buzzer ──
   // Suppress buzzer for first 20s: BME680 MOX coil is heating up and gives
   // spuriously high gas resistance (very high VOC/IAQ) until it stabilises.
   bool buzzerAllowed = (now >= BUZZER_WARMUP_MS);
@@ -970,7 +1030,7 @@ void loop() {
     buzzerState = false;
   }
 
-  // ── I. Hand off the newest reading to Core 0 (instant, no HTTP here) ──
+  // ── J. Hand off the newest reading to Core 0 (instant, no HTTP here) ──
   if (now - lastFirebaseSyncTime >= FIREBASE_SYNC_INTERVAL) {
     lastFirebaseSyncTime = now;
     if (firebaseQueue != nullptr) {

@@ -3,7 +3,7 @@
  * Caches app shell for instant load. Firebase data always from network.
  */
 
-const CACHE_NAME = 'aqm-v5';
+const CACHE_NAME = 'aqm-v6';
 
 const APP_SHELL = [
   './',

@@ -150,7 +150,7 @@
               <i data-lucide="disc" class="sensor-icon"></i>
             </div>
             <div><span class="sensor-value" id="val-pm2_5">--</span><span class="sensor-unit">µg/m³</span></div>
-            <p class="sensor-desc" id="desc-pm2_5">PMS7003</p>
+            <p class="sensor-desc" id="desc-pm2_5">Fine Particles</p>
           </div>
 
           <!-- PM10 -->
@@ -318,6 +318,30 @@
             <span class="chart-expand">Expand →</span>
           </div>
           <div class="chart-canvas-wrap"><canvas id="mini-hum-chart"></canvas></div>
+        </div>
+
+        <!-- Pressure -->
+        <div class="chart-card glass-card" onclick="openFullModal('PRES')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="gauge" style="width:16px;height:16px;color:var(--pres);"></i>
+              <span>Pressure (hPa)</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mini-pres-chart"></canvas></div>
+        </div>
+
+        <!-- VOC Gas -->
+        <div class="chart-card glass-card" onclick="openFullModal('VOC')">
+          <div class="chart-card-header">
+            <div class="chart-title">
+              <i data-lucide="flame" style="width:16px;height:16px;color:var(--voc);"></i>
+              <span>VOC Gas (ppm)</span>
+            </div>
+            <span class="chart-expand">Expand →</span>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="mini-voc-chart"></canvas></div>
         </div>
 
       </div><!-- /tab-analytics -->

@@ -20,7 +20,10 @@ const LIVE_REQUEST_TIMEOUT_MS = 5000;
 const LIVE_STALE_AFTER_MS = 8000;
 
 function getEmptyHistoryData() {
-  return { labels: [], co2: [], aqi: [], pm1_0: [], pm2_5: [], pm10: [], temp: [], hum: [] };
+  return {
+    labels: [], co2: [], aqi: [], pm1_0: [], pm2_5: [], pm10: [],
+    temp: [], hum: [], pres: [], voc_ppm: []
+  };
 }
 
 const state = {
@@ -50,6 +53,8 @@ let miniCo2Chart   = null;
 let miniAqiChart   = null;
 let miniTempChart  = null;
 let miniHumChart   = null;
+let miniPresChart  = null;
+let miniVocChart   = null;
 let fullModalChart = null;
 
 // ═══════════════════════════════════════════════════════════
@@ -141,7 +146,8 @@ function setupNavigation() {
     if (name === 'analytics') {
       refreshChartsData(state.selectedRange);
       setTimeout(() => {
-        [miniPmChart, miniCo2Chart, miniAqiChart, miniTempChart, miniHumChart].forEach(c => c && c.resize());
+        [miniPmChart, miniCo2Chart, miniAqiChart, miniTempChart, miniHumChart, miniPresChart, miniVocChart]
+          .forEach(c => c && c.resize());
       }, 50);
     }
 
@@ -474,6 +480,28 @@ function initCharts(d) {
     },
     options: base
   });
+
+  // Pressure
+  const presCtx = document.getElementById('mini-pres-chart').getContext('2d');
+  miniPresChart = new Chart(presCtx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [{ label: 'Pressure', data: d.pres, borderColor: '#818cf8', pointBackgroundColor: '#818cf8', pointBorderWidth: 0, backgroundColor: 'rgba(129,140,248,0.08)', fill: true, borderWidth: 2, tension: 0.4, pointRadius: 0 }]
+    },
+    options: base
+  });
+
+  // VOC gas
+  const vocCtx = document.getElementById('mini-voc-chart').getContext('2d');
+  miniVocChart = new Chart(vocCtx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [{ label: 'VOC Gas', data: d.voc_ppm, borderColor: '#a78bfa', pointBackgroundColor: '#a78bfa', pointBorderWidth: 0, backgroundColor: 'rgba(167,139,250,0.08)', fill: true, borderWidth: 2, tension: 0.4, pointRadius: 0 }]
+    },
+    options: base
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -511,7 +539,9 @@ function openFullModal(metric) {
     'CO2':         ['CARBON DIOXIDE',     'NDIR sensor readings (PPM)'],
     'AQI':         ['AIR QUALITY INDEX',  'US EPA 0-500 scale'],
     'TEMP':        ['TEMPERATURE',        'BME680 ambient (°C)'],
-    'HUM':         ['RELATIVE HUMIDITY',  'BME680 ambient (%)']
+    'HUM':         ['RELATIVE HUMIDITY',  'BME680 ambient (%)'],
+    'PRES':        ['BAROMETRIC PRESSURE','BME680 ambient (hPa)'],
+    'VOC':         ['VOC GAS',            'BME680 volatile organic compounds (ppm)']
   };
   const [t, s] = meta[metric] || ['ANALYTICS', 'Trend data'];
   title.innerText = t;
@@ -557,7 +587,9 @@ function downsample(entries, bucketMs, range) {
         pm2_5: avg(group, 'pm2_5'),
         pm10: avg(group, 'pm10'),
         temp: avg(group, 'temp', -900),
-        hum: avg(group, 'hum')
+        hum: avg(group, 'hum'),
+        pres: avg(group, 'pres'),
+        voc_ppm: avg(group, 'voc_ppm')
       };
     });
 }
@@ -600,17 +632,17 @@ function fetchFirebaseHistory(range) {
         if (!entries.length) return getEmptyHistoryData();
 
         const sampled = downsample(entries, bucketMs[range] || bucketMs['1D'], range);
-        const labels=[], co2=[], aqi=[], pm1_0=[], pm2_5=[], pm10=[], temp=[], hum=[];
+        const labels=[], co2=[], aqi=[], pm1_0=[], pm2_5=[], pm10=[], temp=[], hum=[], pres=[], voc_ppm=[];
         sampled.forEach(pt => {
           labels.push(pt.label);
           co2.push(pt.co2); aqi.push(pt.aqi);
           pm1_0.push(pt.pm1_0); pm2_5.push(pt.pm2_5); pm10.push(pt.pm10);
-          temp.push(pt.temp); hum.push(pt.hum);
+          temp.push(pt.temp); hum.push(pt.hum); pres.push(pt.pres); voc_ppm.push(pt.voc_ppm);
         });
-        return { labels, co2, aqi, pm1_0, pm2_5, pm10, temp, hum };
+        return { labels, co2, aqi, pm1_0, pm2_5, pm10, temp, hum, pres, voc_ppm };
       } else {
         entries = entries.slice(-60);
-        const labels=[], co2=[], aqi=[], pm1_0=[], pm2_5=[], pm10=[], temp=[], hum=[];
+        const labels=[], co2=[], aqi=[], pm1_0=[], pm2_5=[], pm10=[], temp=[], hum=[], pres=[], voc_ppm=[];
         entries.forEach((e, i) => {
           labels.push(String(i + 1));
           co2.push(e.co2 >= 0 ? e.co2 : null);
@@ -620,8 +652,10 @@ function fetchFirebaseHistory(range) {
           pm10.push(e.pm10 >= 0 ? e.pm10 : null);
           temp.push(e.temp > -900 ? e.temp : null);
           hum.push(e.hum >= 0 ? e.hum : null);
+          pres.push(e.pres >= 0 ? e.pres : null);
+          voc_ppm.push(e.voc_ppm >= 0 ? e.voc_ppm : null);
         });
-        return { labels, co2, aqi, pm1_0, pm2_5, pm10, temp, hum };
+        return { labels, co2, aqi, pm1_0, pm2_5, pm10, temp, hum, pres, voc_ppm };
       }
     })
     .catch(err => {
@@ -644,6 +678,8 @@ function refreshChartsData(range) {
     update(miniAqiChart, d.labels, d.aqi);
     update(miniTempChart, d.labels, d.temp);
     update(miniHumChart, d.labels, d.hum);
+    update(miniPresChart, d.labels, d.pres);
+    update(miniVocChart, d.labels, d.voc_ppm);
   });
 }
 
@@ -662,7 +698,9 @@ function renderFullModalChart(metric, range) {
       'CO2':  [{ label: 'CO2 (PPM)', data: data.co2, borderColor: '#22d3ee', pointBackgroundColor: '#22d3ee', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(34,211,238,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }],
       'AQI':  [{ label: 'AQI', data: data.aqi, borderColor: '#34d399', pointBackgroundColor: '#34d399', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(52,211,153,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }],
       'TEMP': [{ label: 'Temp (°C)', data: data.temp, borderColor: '#fb7185', pointBackgroundColor: '#fb7185', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(251,113,133,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }],
-      'HUM':  [{ label: 'Humidity (%)', data: data.hum, borderColor: '#60a5fa', pointBackgroundColor: '#60a5fa', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(96,165,250,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }]
+      'HUM':  [{ label: 'Humidity (%)', data: data.hum, borderColor: '#60a5fa', pointBackgroundColor: '#60a5fa', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(96,165,250,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }],
+      'PRES': [{ label: 'Pressure (hPa)', data: data.pres, borderColor: '#818cf8', pointBackgroundColor: '#818cf8', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(129,140,248,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }],
+      'VOC':  [{ label: 'VOC Gas (ppm)', data: data.voc_ppm, borderColor: '#a78bfa', pointBackgroundColor: '#a78bfa', pointBorderWidth: 0, pointRadius: 3, backgroundColor: 'rgba(167,139,250,0.1)', fill: true, borderWidth: 2.5, tension: 0.4 }]
     };
 
     fullModalChart = new Chart(ctx, {
@@ -672,7 +710,26 @@ function renderFullModalChart(metric, range) {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, labels: { color: '#94a3b8', font: { size: 11 } } }
+          legend: {
+            display: true,
+            labels: {
+              color: '#94a3b8',
+              font: { size: 11 },
+              boxWidth: 12,
+              boxHeight: 12,
+              generateLabels(chart) {
+                return Chart.defaults.plugins.legend.labels.generateLabels(chart).map(label => {
+                  const dataset = chart.data.datasets[label.datasetIndex] || {};
+                  return {
+                    ...label,
+                    fillStyle: dataset.borderColor || label.fillStyle,
+                    strokeStyle: dataset.borderColor || label.strokeStyle,
+                    lineWidth: 0
+                  };
+                });
+              }
+            }
+          }
         },
         scales: {
           x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#94a3b8', maxTicksLimit: 8, maxRotation: 30 } },
@@ -688,12 +745,27 @@ function renderFullModalChart(metric, range) {
 // ═══════════════════════════════════════════════════════════
 function connectFirebase() {
   const url = state.firebaseConfig.dbUrl.replace(/\/$/, '') + '/readings/current.json';
-
-  document.getElementById('connection-status-dot').className = 'status-dot';
-  document.getElementById('connection-status-text').innerText = 'ONLINE';
-
-  let lastReadingTime = Date.now();
+  let lastReadingTime = 0;
+  let lastReadingFingerprint = null;
+  let hasReceivedLiveReading = false;
   let pollInFlight = false;
+
+  const updateConnectionStatus = () => {
+    const dot = document.getElementById('connection-status-dot');
+    const text = document.getElementById('connection-status-text');
+    if (!dot || !text) return;
+
+    const timestamp = Number(state.liveData.timestamp);
+    const hasWallClockTimestamp = Number.isFinite(timestamp) && timestamp > 1000000000000;
+    const wallClockAge = Date.now() - timestamp;
+    const hasFreshWallClockReading = hasWallClockTimestamp && wallClockAge >= -60000 && wallClockAge <= LIVE_STALE_AFTER_MS;
+    const hasFreshFallbackReading = !hasWallClockTimestamp && lastReadingTime > 0 && (Date.now() - lastReadingTime) <= LIVE_STALE_AFTER_MS;
+    const isOnline = hasReceivedLiveReading && (hasFreshWallClockReading || hasFreshFallbackReading);
+
+    dot.className = isOnline ? 'status-dot' : 'status-dot offline';
+    text.innerText = isOnline ? 'ONLINE' : 'OFFLINE';
+    text.style.color = isOnline ? 'var(--accent)' : 'var(--hazardous)';
+  };
 
   const poll = async () => {
     if (pollInFlight) return;
@@ -704,8 +776,16 @@ function connectFirebase() {
       const response = await fetch(url, { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error(`Firebase returned ${response.status}`);
       const data = await response.json();
-      if (data && data.timestamp !== state.liveData.timestamp) {
-        lastReadingTime = Date.now();
+      if (data && typeof data === 'object') {
+        const fingerprint = JSON.stringify([
+          data.timestamp, data.co2, data.aqi, data.iaq, data.pm1_0, data.pm2_5,
+          data.pm10, data.temp, data.hum, data.pres, data.voc_ppm
+        ]);
+        if (fingerprint !== lastReadingFingerprint) {
+          lastReadingFingerprint = fingerprint;
+          lastReadingTime = Date.now();
+        }
+        hasReceivedLiveReading = true;
         state.liveData = { ...state.liveData, ...data };
         updateUI(state.liveData);
       }
@@ -714,6 +794,7 @@ function connectFirebase() {
     } finally {
       clearTimeout(timeoutId);
       pollInFlight = false;
+      updateConnectionStatus();
     }
   };
 
@@ -721,21 +802,8 @@ function connectFirebase() {
   setInterval(poll, LIVE_POLL_INTERVAL_MS);
 
   setInterval(() => {
-    const age = Date.now() - lastFetchSuccessTime;
-    const dot = document.getElementById('connection-status-dot');
-    const text = document.getElementById('connection-status-text');
-    if (dot && text) {
-      if (age > LIVE_STALE_AFTER_MS) {
-        dot.className = 'status-dot offline';
-        text.innerText = 'OFFLINE';
-        text.style.color = 'var(--hazardous)';
-      } else {
-        dot.className = 'status-dot';
-        text.innerText = 'ONLINE';
-        text.style.color = 'var(--accent)';
-      }
-    }
-  }, 5000);
+    updateConnectionStatus();
+  }, 1000);
 }
 
 // ═══════════════════════════════════════════════════════════

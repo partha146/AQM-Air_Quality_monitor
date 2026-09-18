@@ -7,7 +7,7 @@
 ## ✨ Features
 
 - 📡 **Real-time sensor data** — CO₂, PM1.0, PM2.5, PM10, Temperature, Humidity, Pressure, VOC, AQI, IAQ
-- 🔥 **Firebase RTDB integration** — live readings synced every second; history retained once per minute to avoid excessive database growth
+- 🔥 **Firebase RTDB integration** — live readings synced every 10 seconds, full history log
 - 📱 **Android App** (Capacitor) — live dashboard, historical charts, buzzer mute toggle, WiFi management
 - 🖥️ **SSD1306 OLED** — 5-page local display with yellow header bar and blue data body; shows active WiFi slot number
 - 🔊 **Active buzzer alerts** — triggers on hazardous CO₂, PM2.5, AQI or IAQ levels; 20s warmup suppression on boot
